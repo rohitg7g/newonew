@@ -1,231 +1,553 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BossZ YouTube Uploader</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BossZ YouTube Uploader</title>
 
-<!-- Tailwind CSS -->
-<script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Google OAuth -->
-<script src="https://accounts.google.com/gsi/client" async></script>
+  <!-- Google OAuth -->
+  <script src="https://accounts.google.com/gsi/client" async></script>
+
+  <style>
+    /* small custom styles for smooth drag animation and modal backdrop */
+    .drag-animate {
+      transition: box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+    }
+    .drop-glow {
+      box-shadow: 0 10px 30px rgba(59,130,246,0.12);
+      transform: translateY(-4px) scale(1.01);
+    }
+    /* modal show/hide */
+    .modal-backdrop { background: rgba(0,0,0,0.45); }
+  </style>
 </head>
 
-<body class="bg-gray-100 text-gray-800 font-sans">
+<body class="antialiased bg-gray-100 text-gray-900 transition-colors duration-200" data-theme="light">
 
-<div class="max-w-3xl mx-auto p-6">
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="w-full max-w-3xl">
 
-  <h1 class="text-3xl font-bold mb-6 text-center">BossZ YouTube Uploader</h1>
+      <!-- Header -->
+      <header class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl sm:text-3xl font-semibold">BossZ YouTube Uploader</h1>
 
-  <!-- Login -->
-  <div class="text-center mb-6">
-    <button id="login" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded">
-      Login with Google
-    </button>
-    <p id="status" class="mt-2 text-sm text-gray-600"></p>
-  </div>
+        <div class="flex items-center space-x-3">
+          <!-- Dark Mode Toggle -->
+          <button id="darkToggle" aria-label="Toggle dark mode"
+            class="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-sm">
+            Dark
+          </button>
 
-  <!-- Upload Card -->
-  <div class="bg-white p-6 rounded shadow-md mb-6">
+          <!-- Google Login -->
+          <button id="login" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
+            Login with Google
+          </button>
+        </div>
+      </header>
 
-    <label class="block mb-2 font-semibold">Video Title:</label>
-    <input type="text" id="title" placeholder="Enter video title"
-      class="w-full p-2 border rounded mb-4">
+      <!-- Status -->
+      <p id="status" class="text-sm text-gray-600 mb-4"></p>
 
-    <label class="block mb-2 font-semibold">Select Video:</label>
+      <!-- Upload Card -->
+      <main class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-4">
 
-    <!-- DRAG & DROP ZONE -->
-    <div id="drop-area"
-      class="mb-4 border-2 border-dashed border-gray-400 rounded p-6 text-center bg-gray-50 cursor-pointer">
-      <p class="text-gray-600">Drag and drop your video here</p>
-      <p class="text-gray-500 text-sm">or click to select</p>
-    </div>
-
-    <input type="file" id="video" accept="video/*" class="hidden">
-    <p id="video-name" class="text-sm text-gray-700 mt-2"></p>
-
-    <label class="block mt-4 mb-2 font-semibold">Select Thumbnail (optional):</label>
-    <input type="file" id="thumbnail" accept="image/*" class="mb-4">
-
-    <button id="upload"
-      class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded w-full">
-      Upload to YouTube
-    </button>
-
-    <!-- Progress Bar -->
-    <div class="mt-4">
-      <div class="w-full bg-gray-200 rounded h-4 overflow-hidden">
-        <div id="progress-bar" class="bg-green-500 h-4 w-0"></div>
-      </div>
-      <p id="upload-text" class="mt-2 text-sm text-gray-700"></p>
-    </div>
-
-  </div>
-
-  <!-- Upload History -->
-  <div class="bg-white p-6 rounded shadow-md">
-    <h2 class="text-xl font-bold mb-4">Upload History</h2>
-    <div id="history" class="space-y-4"></div>
-  </div>
-
-</div>
-
-<script>
-let accessToken = "";
-
-// GOOGLE LOGIN
-document.getElementById("login").onclick = () => {
-  google.accounts.oauth2.initTokenClient({
-    client_id: "496759705976-haei6j7go7dc9ri059ce0atk1juruj2v.apps.googleusercontent.com",
-    scope: "https://www.googleapis.com/auth/youtube.upload",
-    callback: (tokenInfo) => {
-      accessToken = tokenInfo.access_token;
-      document.getElementById("status").textContent = "Logged in!";
-    }
-  }).requestAccessToken();
-};
-
-// LOAD HISTORY
-function loadHistory() {
-  const history = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
-  const div = document.getElementById("history");
-  div.innerHTML = "";
-
-  history.forEach(item => {
-    div.insertAdjacentHTML("beforeend", `
-      <div class="border rounded p-3 flex items-center space-x-3 bg-gray-50">
-        ${item.thumbnail ? `<img src="${item.thumbnail}" class="w-16 h-16 object-cover rounded">` : ""}
+        <!-- Title -->
         <div>
-          <p class="font-semibold">${item.title}</p>
-          <a href="${item.link}" target="_blank" class="text-blue-600 hover:underline">${item.link}</a>
+          <label class="block text-sm font-medium mb-1">Video Title</label>
+          <input id="title" type="text" placeholder="Enter video title"
+            class="w-full px-3 py-2 rounded border dark:border-gray-700 dark:bg-gray-900 focus:outline-none" />
+        </div>
+
+        <!-- Telegram file link (direct .mp4) -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Telegram Video File Link (direct .mp4)</label>
+          <input id="tg-link" type="url" placeholder="https://t.me/....mp4"
+            class="w-full px-3 py-2 rounded border dark:border-gray-700 dark:bg-gray-900 focus:outline-none" />
+          <p class="text-xs text-gray-500 mt-1">If provided, the app will fetch this file and upload it to YouTube. This overrides local file input.</p>
+        </div>
+
+        <!-- Drag & Drop / File input -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Select Video</label>
+
+          <div id="drop-area"
+            class="drag-animate w-full border-2 border-dashed border-gray-300 dark:border-gray-700 rounded p-6 text-center bg-gray-50 dark:bg-gray-900 cursor-pointer">
+            <div id="drop-inner" class="flex flex-col items-center justify-center space-y-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M7 16l5-5 5 5M12 11v10" /></svg>
+              <div>
+                <p class="text-gray-700 dark:text-gray-300">Drag & drop a video here</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">or click to select a file</p>
+              </div>
+            </div>
+          </div>
+
+          <input id="video" type="file" accept="video/*" class="hidden" />
+          <p id="video-name" class="text-sm text-gray-700 dark:text-gray-300 mt-2"></p>
+        </div>
+
+        <!-- Thumbnail -->
+        <div>
+          <label class="block text-sm font-medium mb-1">Thumbnail (optional)</label>
+          <div class="flex items-center space-x-3">
+            <input id="thumbnail" type="file" accept="image/*" class="block" />
+            <div id="thumb-preview" class="w-20 h-12 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden flex items-center justify-center text-xs text-gray-500">
+              No preview
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-3">
+          <button id="upload" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+            Upload to YouTube
+          </button>
+          <button id="clearInputs" class="px-4 py-2 rounded border dark:border-gray-700 text-sm">
+            Clear
+          </button>
+        </div>
+
+        <!-- Progress -->
+        <div>
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-3 overflow-hidden">
+            <div id="progress-bar" class="h-3 bg-green-500 w-0 transition-all"></div>
+          </div>
+          <p id="upload-text" class="text-sm text-gray-600 dark:text-gray-300 mt-2"></p>
+        </div>
+      </main>
+
+      <!-- Success Modal (hidden by default) -->
+      <div id="success-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+        <div class="absolute inset-0 modal-backdrop"></div>
+        <div class="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-11/12 max-w-md z-10 text-center">
+          <h3 class="text-xl font-semibold mb-2">Upload Successful</h3>
+          <p id="success-message" class="text-sm text-gray-600 dark:text-gray-300 mb-4"></p>
+          <div class="flex gap-2 justify-center">
+            <a id="watch-link" class="px-4 py-2 bg-blue-600 text-white rounded" target="_blank" rel="noreferrer">Watch on YouTube</a>
+            <button id="close-success" class="px-4 py-2 border rounded">Close</button>
+          </div>
         </div>
       </div>
-    `);
-  });
-}
-loadHistory();
 
+      <!-- History + Telegram links card -->
+      <section class="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-medium">Upload History</h2>
+          <div class="flex items-center gap-2">
+            <button id="clearHistory" class="text-sm px-3 py-1 border rounded">Clear all</button>
+          </div>
+        </div>
 
-// DRAG AND DROP
-const dropArea = document.getElementById("drop-area");
-const videoInput = document.getElementById("video");
-const videoName = document.getElementById("video-name");
+        <div id="history" class="space-y-3"></div>
 
-// Click to open file dialog
-dropArea.addEventListener("click", () => videoInput.click());
+        <!-- Telegram link area for sharing a single Telegram video link in history (optional) -->
+        <div class="mt-4 border-t pt-4">
+          <label class="block text-sm font-medium mb-1">Attach Telegram Channel Link (for record)</label>
+          <input id="telegram-share" type="url" placeholder="https://t.me/channelname/1234"
+            class="w-full px-3 py-2 rounded border dark:border-gray-700 dark:bg-gray-900 focus:outline-none" />
+          <p class="text-xs text-gray-500 mt-1">If you want to add a Telegram channel post link for reference, paste it here and press Enter when saving an upload.</p>
+        </div>
+      </section>
 
-// Selected manually
-videoInput.addEventListener("change", () => {
-  if (videoInput.files.length > 0) {
-    videoName.textContent = "Selected: " + videoInput.files[0].name;
-  }
-});
+      <!-- Footer -->
+      <footer class="mt-6 text-center text-xs text-gray-500">
+        Built for BossZ · Keep your API keys safe
+      </footer>
+    </div>
+  </div>
 
-// Prevent default browser drag behavior
-["dragenter", "dragover", "dragleave", "drop"].forEach(event => {
-  dropArea.addEventListener(event, e => e.preventDefault());
-});
+  <script>
+    /***********************
+     * Basic app variables
+     ***********************/
+    let accessToken = "";
+    const clientId = "496759705976-haei6j7go7dc9ri059ce0atk1juruj2v.apps.googleusercontent.com";
 
-// Highlight
-["dragenter", "dragover"].forEach(event => {
-  dropArea.addEventListener(event, () => {
-    dropArea.classList.add("bg-blue-50", "border-blue-500");
-  });
-});
-
-// Unhighlight
-["dragleave", "drop"].forEach(event => {
-  dropArea.addEventListener(event, () => {
-    dropArea.classList.remove("bg-blue-50", "border-blue-500");
-  });
-});
-
-// Handle dropped file
-dropArea.addEventListener("drop", e => {
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith("video/")) {
-    videoInput.files = e.dataTransfer.files;
-    videoName.textContent = "Selected: " + file.name;
-  } else {
-    alert("Please drop a valid video file.");
-  }
-});
-
-
-// UPLOAD FUNCTION
-document.getElementById("upload").onclick = async () => {
-  if (!accessToken) return alert("Login first!");
-  const file = videoInput.files[0];
-  const title = document.getElementById("title").value;
-  const thumbFile = document.getElementById("thumbnail").files[0];
-
-  if (!file || !title) return alert("Please provide video and title.");
-
-  const metadata = {
-    snippet: { title },
-    status: { privacyStatus: "unlisted" }
-  };
-
-  const form = new FormData();
-  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-  form.append("video", file);
-
-  const bar = document.getElementById("progress-bar");
-  const text = document.getElementById("upload-text");
-
-  bar.style.width = "0%";
-  text.textContent = "Uploading...";
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status");
-  xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
-
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) {
-      const percent = Math.round((e.loaded / e.total) * 100);
-      bar.style.width = percent + "%";
-      text.textContent = `Uploading... ${percent}%`;
-    }
-  };
-
-  xhr.onload = async () => {
-    const data = JSON.parse(xhr.responseText);
-
-    if (data.id) {
-      text.textContent = "Upload complete!";
-      let thumbUrl = "";
-
-      // Thumbnail upload
-      if (thumbFile) {
-        const tf = new FormData();
-        tf.append("media_body", thumbFile);
-        await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${data.id}`, {
-          method: "POST",
-          headers: { Authorization: "Bearer " + accessToken },
-          body: tf
-        });
-        thumbUrl = URL.createObjectURL(thumbFile);
+    /***********************
+     * Dark mode toggle
+     ***********************/
+    const darkToggle = document.getElementById("darkToggle");
+    function setTheme(isDark) {
+      const body = document.body;
+      if (isDark) {
+        body.classList.add("dark", "bg-gray-900", "text-gray-100");
+        darkToggle.textContent = "Light";
+        body.dataset.theme = "dark";
+      } else {
+        body.classList.remove("dark", "bg-gray-900", "text-gray-100");
+        darkToggle.textContent = "Dark";
+        body.dataset.theme = "light";
       }
+      localStorage.setItem("bossz_theme", isDark ? "dark" : "light");
+    }
+    // initialize theme from storage
+    const savedTheme = localStorage.getItem("bossz_theme") || "light";
+    setTheme(savedTheme === "dark");
+    darkToggle.addEventListener("click", () => setTheme(document.body.dataset.theme !== "dark"));
 
-      // Save history
-      const history = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
-      history.unshift({
-        title,
-        link: "https://youtube.com/watch?v=" + data.id,
-        thumbnail: thumbUrl
+    /***********************
+     * Google Login
+     ***********************/
+    document.getElementById("login").addEventListener("click", () => {
+      google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube",
+        callback: (tokenResponse) => {
+          if (tokenResponse.error) {
+            document.getElementById("status").textContent = "Login failed.";
+            return;
+          }
+          accessToken = tokenResponse.access_token;
+          document.getElementById("status").textContent = "Logged in";
+        }
+      }).requestAccessToken();
+    });
+
+    /***********************
+     * Elements
+     ***********************/
+    const dropArea = document.getElementById("drop-area");
+    const videoInput = document.getElementById("video");
+    const videoName = document.getElementById("video-name");
+    const thumbnailInput = document.getElementById("thumbnail");
+    const thumbPreview = document.getElementById("thumb-preview");
+    const uploadBtn = document.getElementById("upload");
+    const clearBtn = document.getElementById("clearInputs");
+    const progressBar = document.getElementById("progress-bar");
+    const uploadText = document.getElementById("upload-text");
+    const historyDiv = document.getElementById("history");
+    const clearHistoryBtn = document.getElementById("clearHistory");
+    const tgInput = document.getElementById("tg-link");
+    const telegramShareInput = document.getElementById("telegram-share");
+
+    // success modal
+    const successModal = document.getElementById("success-modal");
+    const successMessage = document.getElementById("success-message");
+    const watchLink = document.getElementById("watch-link");
+    const closeSuccess = document.getElementById("close-success");
+
+    /***********************
+     * Drag & Drop handlers (animation + selection)
+     ***********************/
+    // helper to prevent defaults on document-level drag events
+    ["dragenter", "dragover", "dragleave", "drop"].forEach(evt => {
+      document.addEventListener(evt, (e) => e.preventDefault());
+    });
+
+    dropArea.addEventListener("click", () => videoInput.click());
+
+    // highlight
+    ["dragenter", "dragover"].forEach(evt =>
+      dropArea.addEventListener(evt, () => {
+        dropArea.classList.add("drop-glow");
+      })
+    );
+    // unhighlight
+    ["dragleave", "drop"].forEach(evt =>
+      dropArea.addEventListener(evt, () => {
+        dropArea.classList.remove("drop-glow");
+      })
+    );
+
+    dropArea.addEventListener("drop", (e) => {
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        alert("Please drop a valid video file.");
+        return;
+      }
+      videoInput.files = e.dataTransfer.files;
+      videoName.textContent = `Selected: ${file.name}`;
+    });
+
+    // normal file selection
+    videoInput.addEventListener("change", () => {
+      if (videoInput.files.length > 0) videoName.textContent = `Selected: ${videoInput.files[0].name}`;
+      else videoName.textContent = "";
+    });
+
+    /***********************
+     * Thumbnail preview
+     ***********************/
+    thumbnailInput.addEventListener("change", () => {
+      const file = thumbnailInput.files[0];
+      if (!file) {
+        thumbPreview.innerHTML = "No preview";
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      thumbPreview.innerHTML = `<img src="${url}" alt="thumb" class="w-full h-full object-cover">`;
+    });
+
+    /***********************
+     * History (localStorage)
+     ***********************/
+    function loadHistory() {
+      const items = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
+      historyDiv.innerHTML = "";
+      items.forEach((it, idx) => {
+        const card = document.createElement("div");
+        card.className = "flex items-center justify-between p-3 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-900";
+        card.innerHTML = `
+          <div class="flex items-center gap-3">
+            ${it.thumbnail ? `<img src="${it.thumbnail}" class="w-16 h-12 object-cover rounded">` : `<div class="w-16 h-12 bg-gray-200 dark:bg-gray-800 rounded flex items-center justify-center text-xs text-gray-500">No thumb</div>`}
+            <div>
+              <div class="font-medium">${escapeHtml(it.title)}</div>
+              <div class="text-xs text-blue-600"><a href="${it.link}" target="_blank" rel="noreferrer">${it.link}</a></div>
+              ${it.telegram ? `<div class="text-xs text-gray-500 mt-1">TG: <a href="${it.telegram}" target="_blank" rel="noreferrer" class="text-blue-500">${it.telegram}</a></div>` : ""}
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button data-idx="${idx}" class="delete-btn px-2 py-1 border rounded text-sm">Delete</button>
+          </div>
+        `;
+        historyDiv.appendChild(card);
       });
 
-      localStorage.setItem("uploadHistory", JSON.stringify(history));
-      loadHistory();
-    } else {
-      text.textContent = "Error: " + JSON.stringify(data);
+      // attach delete listeners
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const i = Number(btn.getAttribute("data-idx"));
+          deleteHistoryItem(i);
+        });
+      });
     }
-  };
 
-  xhr.send(form);
-};
-</script>
+    function saveHistoryItem(item) {
+      const arr = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
+      arr.unshift(item);
+      // limit to 50 items
+      localStorage.setItem("uploadHistory", JSON.stringify(arr.slice(0, 50)));
+      loadHistory();
+    }
 
+    function deleteHistoryItem(index) {
+      const arr = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
+      if (index < 0 || index >= arr.length) return;
+      arr.splice(index, 1);
+      localStorage.setItem("uploadHistory", JSON.stringify(arr));
+      loadHistory();
+    }
+
+    clearHistoryBtn.addEventListener("click", () => {
+      if (!confirm("Clear all upload history?")) return;
+      localStorage.removeItem("uploadHistory");
+      loadHistory();
+    });
+
+    loadHistory();
+
+    /***********************
+     * Utility helpers
+     ***********************/
+    function escapeHtml(text) {
+      if (!text) return "";
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    /***********************
+     * Telegram fetch helper (Option C)
+     * NOTE: CORS may block some public Telegram hosts; this function tries a direct fetch.
+     ***********************/
+    async function fetchTelegramVideo(url) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          alert("Failed to fetch Telegram video. Ensure the URL is a direct file link and publicly accessible.");
+          return null;
+        }
+        const blob = await resp.blob();
+        if (!blob.type.startsWith("video/")) {
+          alert("Fetched file is not a video.");
+          return null;
+        }
+        const filename = url.split("/").pop().split("?")[0] || "telegram_video.mp4";
+        return new File([blob], filename, { type: blob.type });
+      } catch (err) {
+        console.error(err);
+        alert("Error fetching Telegram video. CORS or network issue might be blocking the request.");
+        return null;
+      }
+    }
+
+    /***********************
+     * Upload flow
+     ***********************/
+    uploadBtn.addEventListener("click", async () => {
+      // basic checks
+      if (!accessToken) {
+        alert("Please login with Google first.");
+        return;
+      }
+      const title = document.getElementById("title").value.trim();
+      if (!title) {
+        alert("Please provide a title.");
+        return;
+      }
+
+      uploadText.textContent = "";
+
+      // determine source: Telegram link (direct) overrides file input
+      let file = videoInput.files[0];
+      const tgLinkVal = tgInput.value.trim();
+      if (tgLinkVal) {
+        uploadText.textContent = "Downloading Telegram video...";
+        file = await fetchTelegramVideo(tgLinkVal);
+        if (!file) {
+          uploadText.textContent = "";
+          return;
+        }
+        videoName.textContent = `Telegram: ${file.name}`;
+      }
+
+      if (!file) {
+        alert("Please provide a video file or paste a direct Telegram file link.");
+        return;
+      }
+
+      // optional thumbnail file
+      const thumbFile = thumbnailInput.files[0];
+
+      // prepare metadata
+      const metadata = {
+        snippet: { title },
+        status: { privacyStatus: "unlisted" }
+      };
+
+      // Build multipart form for upload (simple approach)
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+      form.append("video", file);
+
+      // Start upload via XHR to track progress
+      progressBar.style.width = "0%";
+      uploadText.textContent = "Uploading to YouTube...";
+
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status");
+        xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const pct = Math.round((event.loaded / event.total) * 100);
+            progressBar.style.width = pct + "%";
+            uploadText.textContent = `Uploading... ${pct}%`;
+          }
+        };
+
+        xhr.onload = async () => {
+          let data;
+          try {
+            data = JSON.parse(xhr.responseText);
+          } catch (e) {
+            uploadText.textContent = "Unexpected response from API.";
+            console.error(xhr.responseText);
+            return;
+          }
+
+          if (data && data.id) {
+            // optionally upload thumbnail
+            let thumbUrl = "";
+            if (thumbFile) {
+              try {
+                const tf = new FormData();
+                tf.append("media_body", thumbFile);
+                await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${data.id}`, {
+                  method: "POST",
+                  headers: { Authorization: "Bearer " + accessToken },
+                  body: tf
+                });
+                thumbUrl = URL.createObjectURL(thumbFile);
+              } catch (err) {
+                console.warn("Thumbnail upload failed", err);
+              }
+            }
+
+            // success UI
+            const ytLink = `https://youtube.com/watch?v=${data.id}`;
+            successMessage.textContent = `Your video "${title}" was uploaded successfully.`;
+            watchLink.href = ytLink;
+            watchLink.textContent = "Watch on YouTube";
+            successModal.classList.remove("hidden");
+            successModal.style.display = "flex";
+
+            // save to history (include optional telegram share link from input)
+            const histItem = {
+              title,
+              link: ytLink,
+              thumbnail: thumbUrl,
+              telegram: telegramShareInput.value.trim() || ""
+            };
+            saveHistoryItem(histItem);
+
+            // reset UI bits
+            progressBar.style.width = "100%";
+            uploadText.textContent = "Upload complete";
+          } else {
+            console.error("Upload error", data);
+            uploadText.textContent = "Upload failed: " + (data && data.error ? JSON.stringify(data.error) : "unknown");
+            alert("Upload failed. See console for details.");
+          }
+        };
+
+        xhr.onerror = () => {
+          uploadText.textContent = "Upload failed due to network error.";
+          alert("Network error during upload.");
+        };
+
+        xhr.send(form);
+
+      } catch (err) {
+        console.error(err);
+        uploadText.textContent = "Upload error.";
+        alert("An unexpected error occurred.");
+      }
+    });
+
+    // success modal close
+    closeSuccess.addEventListener("click", () => {
+      successModal.classList.add("hidden");
+      successModal.style.display = "none";
+    });
+
+    // clear inputs
+    clearBtn.addEventListener("click", () => {
+      document.getElementById("title").value = "";
+      tgInput.value = "";
+      videoInput.value = "";
+      thumbnailInput.value = "";
+      telegramShareInput.value = "";
+      videoName.textContent = "";
+      thumbPreview.innerHTML = "No preview";
+      progressBar.style.width = "0%";
+      uploadText.textContent = "";
+    });
+
+    /***********************
+     * Escape hatch: attempt to gracefully handle page unload
+     ***********************/
+    window.addEventListener("beforeunload", (e) => {
+      // If uploading, warn user (simple heuristic)
+      if (uploadText.textContent && uploadText.textContent.toLowerCase().includes("uploading")) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+
+    /***********************
+     * Initialize small things
+     ***********************/
+    // ensure history shown on load
+    loadHistory();
+  </script>
 </body>
 </html>
