@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BossZ YouTube Uploader</title>
+<!-- Tailwind CDN for styling -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+<div class="max-w-3xl mx-auto p-6">
+
+  <h1 class="text-3xl font-bold mb-6 text-center">BossZ YouTube Uploader</h1>
+
+  <!-- Login -->
+  <div class="text-center mb-6">
+    <button id="login" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded">
+      Login with Google
+    </button>
+    <p id="status" class="mt-2 text-sm text-gray-600"></p>
+  </div>
+
+  <!-- Upload Form -->
+  <div class="bg-white p-6 rounded shadow-md mb-6">
+    <label class="block mb-2 font-semibold">Video Title:</label>
+    <input type="text" id="title" placeholder="Enter video title" class="w-full p-2 border rounded mb-4">
+
+    <label class="block mb-2 font-semibold">Select Video:</label>
+    <input type="file" id="video" accept="video/*" class="mb-4">
+
+    <label class="block mb-2 font-semibold">Select Thumbnail (optional):</label>
+    <input type="file" id="thumbnail" accept="image/*" class="mb-4">
+
+    <button id="upload" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded w-full">
+      Upload to YouTube
+    </button>
+
+    <div class="mt-4">
+      <div class="w-full bg-gray-200 rounded h-4 overflow-hidden">
+        <div id="progress-bar" class="bg-green-500 h-4 w-0"></div>
+      </div>
+      <p id="upload-text" class="mt-2 text-sm text-gray-700"></p>
+    </div>
+  </div>
+
+  <!-- Uploaded Videos History -->
+  <div class="bg-white p-6 rounded shadow-md">
+    <h2 class="text-xl font-bold mb-4">Upload History</h2>
+    <div id="history" class="space-y-4"></div>
+  </div>
+
+</div>
+
+<script>
+let accessToken = "";
+
+// Google login
+document.getElementById("login").onclick = () => {
+  google.accounts.oauth2.initTokenClient({
+    client_id: "496759705976-haei6j7go7dc9ri059ce0atk1juruj2v.apps.googleusercontent.com",
+    scope: "https://www.googleapis.com/auth/youtube.upload",
+    callback: (tokenInfo) => {
+      accessToken = tokenInfo.access_token;
+      document.getElementById("status").textContent = "Logged in!";
+    }
+  }).requestAccessToken();
+};
+
+// Load saved history from localStorage
+function loadHistory() {
+  const historyDiv = document.getElementById("history");
+  const history = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
+  historyDiv.innerHTML = "";
+  history.forEach(item => {
+    const html = `
+      <div class="border rounded p-3 flex items-center space-x-3 bg-gray-50">
+        ${item.thumbnail ? `<img src="${item.thumbnail}" class="w-16 h-16 object-cover rounded">` : ''}
+        <div>
+          <p class="font-semibold">${item.title}</p>
+          <a href="${item.link}" target="_blank" class="text-blue-600 hover:underline">${item.link}</a>
+        </div>
+      </div>
+    `;
+    historyDiv.insertAdjacentHTML("beforeend", html);
+  });
+}
+loadHistory();
+
+// Upload video
+document.getElementById("upload").onclick = async () => {
+  if (!accessToken) { alert("Login first!"); return; }
+
+  const file = document.getElementById("video").files[0];
+  const title = document.getElementById("title").value;
+  const thumbnailFile = document.getElementById("thumbnail").files[0];
+
+  if (!file || !title) { alert("Please provide video and title."); return; }
+
+  const metadata = {
+    snippet: { title },
+    status: { privacyStatus: "unlisted" }
+  };
+
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append("video", file);
+
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("upload-text").textContent = "Uploading...";
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status");
+  xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100);
+      document.getElementById("progress-bar").style.width = percent + "%";
+      document.getElementById("upload-text").textContent = `Uploading... ${percent}%`;
+    }
+  };
+
+  xhr.onload = async () => {
+    const data = JSON.parse(xhr.responseText);
+    if (data.id) {
+      document.getElementById("upload-text").textContent = "Upload complete!";
+      let thumbUrl = "";
+
+      // Upload custom thumbnail if selected
+      if (thumbnailFile) {
+        const thumbForm = new FormData();
+        thumbForm.append("media_body", thumbnailFile);
+        await fetch(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${data.id}`, {
+          method: "POST",
+          headers: { Authorization: "Bearer " + accessToken },
+          body: thumbForm
+        });
+        thumbUrl = URL.createObjectURL(thumbnailFile);
+      }
+
+      // Save to local history
+      const history = JSON.parse(localStorage.getItem("uploadHistory") || "[]");
+      history.unshift({ title, link: `https://youtube.com/watch?v=${data.id}`, thumbnail: thumbUrl });
+      localStorage.setItem("uploadHistory", JSON.stringify(history));
+      loadHistory();
+    } else {
+      document.getElementById("upload-text").textContent = "Error: " + JSON.stringify(data);
+    }
+  };
+
+  xhr.send(form);
+};
+</script>
+
+</body>
+</html>
